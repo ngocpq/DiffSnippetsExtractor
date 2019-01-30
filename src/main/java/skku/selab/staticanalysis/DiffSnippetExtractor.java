@@ -58,7 +58,7 @@ public class DiffSnippetExtractor {
         outdir.setRequired(true);
         options.addOption(outdir);
         
-        Option optFilePath = new Option("f", "file", false, "source code file");
+        Option optFilePath = new Option("f", "file", true, "source code file");
         optFilePath.setRequired(false);
         options.addOption(optFilePath);                
 
