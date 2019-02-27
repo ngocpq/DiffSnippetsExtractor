@@ -100,12 +100,19 @@ public class DiffSnippetExtractor {
 
 	private static void genDiffCodeSnippetForDir(String srcDirPath, String patchDirPath,String outputDir) throws Exception {
 		 String[] filePaths = FileUtils.getAllFilesInFolder(patchDirPath);
+		 int countSnippets = 0;
+		 int countFiles = 0;
 		 for(String file:filePaths){
-			 genDiffCodeSnippetForFile(srcDirPath, patchDirPath, file, outputDir);
+			 int count = genDiffCodeSnippetForFile(srcDirPath, patchDirPath, file, outputDir);
+			 countSnippets += count;
+			 if (count>0)
+				 countFiles++;
 		 }
+		 System.out.println("#Changed files: " + countFiles);
+		 System.out.println("#Snippets files: " + countSnippets);
 	}
 	
-	private static void genDiffCodeSnippetForFile(String srcDirPath, String patchDirPath, String filePath,
+	private static int genDiffCodeSnippetForFile(String srcDirPath, String patchDirPath, String filePath,
 			String outputDir) throws Exception {
 		String bugFilePath = srcDirPath+File.separator+filePath;
     	String patchFilePath = patchDirPath+File.separator+filePath;    	    	
@@ -204,6 +211,7 @@ public class DiffSnippetExtractor {
     			System.out.println(patchedCode);
     		}
     	}
+    	return diffPairs.size();
 	}
 
 	private static CtElement getContainCodeSnippet(CtElement srcNode) {

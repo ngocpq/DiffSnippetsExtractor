@@ -26,7 +26,7 @@ public class FileUtils {
 
 	public static String[] getAllFilesInFolder(String patchDirPath) {
 		File dir = new File(patchDirPath);
-		Collection<File> list = org.apache.commons.io.FileUtils.listFiles(dir, new RegexFileFilter("^(.*?)"), DirectoryFileFilter.DIRECTORY);
+		Collection<File> list = org.apache.commons.io.FileUtils.listFiles(dir, new RegexFileFilter("^(.*?).java$"), DirectoryFileFilter.DIRECTORY);
 		String[] rs = new String[list.size()];
 		int i=0;
 		for(File file:list){
