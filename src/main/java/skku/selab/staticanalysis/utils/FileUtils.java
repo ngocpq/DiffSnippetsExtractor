@@ -24,9 +24,11 @@ public class FileUtils {
 	    writer.close();
 	}
 
-	public static String[] getAllFilesInFolder(String patchDirPath) {
+	public static String[] getAllFilesInFolder(String patchDirPath,String regexString) {
 		File dir = new File(patchDirPath);
-		Collection<File> list = org.apache.commons.io.FileUtils.listFiles(dir, new RegexFileFilter("^(.*?)"), DirectoryFileFilter.DIRECTORY);
+		//String regexString = ".[jJ]ava$";
+		RegexFileFilter regex = new RegexFileFilter(regexString); //"^(.*?)"
+		Collection<File> list = org.apache.commons.io.FileUtils.listFiles(dir, regex, DirectoryFileFilter.DIRECTORY);
 		String[] rs = new String[list.size()];
 		int i=0;
 		for(File file:list){

@@ -12,6 +12,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.commons.lang3.EnumUtils;
 
 import com.github.gumtreediff.actions.model.Addition;
 import com.github.gumtreediff.actions.model.Insert;
@@ -27,8 +28,11 @@ import spoon.reflect.declaration.CtConstructor;
 import spoon.reflect.declaration.CtElement;
 import spoon.reflect.declaration.CtField;
 import spoon.reflect.declaration.CtMethod;
+import spoon.support.sniper.internal.ElementSourceFragment;
 
 public class DiffSnippetExtractor {
+	static LogLevel logLevel = LogLevel.info;
+	
 	public static void main( String[] args ) throws Exception
     {
 		/*args=new String[]{
@@ -40,9 +44,10 @@ public class DiffSnippetExtractor {
 		
 		/*args=new String[]{
 			//"-f","java_programs/Node.java",
-			"-s","C:/VirtualMachines/SharedFolder/quixbugs/buggy_programs",
-			"-p","C:/VirtualMachines/SharedFolder/quixbugs/patchedPrograms/depth_first_search/Arja/p2",
-			"-o","C:/VirtualMachines/SharedFolder/quixbugs/quixbugs_snippets/depth_first_search_Arja_p2",
+			"-s","C:/VirtualMachines/SharedFolder/Defects4J/Cli1_Developer_p1/original",
+			"-p","C:/VirtualMachines/SharedFolder/Defects4J/Cli1_Developer_p1/patched",
+			"-o","C:/VirtualMachines/SharedFolder/Defects4J/test_snippets/Cli1_Developer_p1_test",
+			"-l","info"
 		};*/
     	Options options = new Options();
 
@@ -60,8 +65,17 @@ public class DiffSnippetExtractor {
         
         Option optFilePath = new Option("f", "file", true, "source code file");
         optFilePath.setRequired(false);
-        options.addOption(optFilePath);                
-
+        options.addOption(optFilePath);       
+        
+        //.[jJ]ava$
+        Option optRegexPattern = new Option("r", "regex", true, "regex file pattern");
+        optRegexPattern.setRequired(false);
+        options.addOption(optRegexPattern);
+        
+        Option optLogLever = new Option("l", "log", true, "log level");
+        optLogLever.setRequired(false);
+        options.addOption(optLogLever);
+        
         CommandLineParser parser = new DefaultParser();
         HelpFormatter formatter = new HelpFormatter();
         CommandLine cmd;
@@ -84,22 +98,41 @@ public class DiffSnippetExtractor {
     	 * 			--code1.java.snippet1
     	 */
     	
-    	
     	String srcDirPath = cmd.getOptionValue(srcDir.getOpt());    	
     	String patchDirPath = cmd.getOptionValue(patchDir.getOpt());
     	String filePath = cmd.getOptionValue(optFilePath.getOpt());	
-    	String outputDir = cmd.getOptionValue(outdir.getOpt());    	    	
+    	String outputDir = cmd.getOptionValue(outdir.getOpt());    	    	    	
+    	    	
+    	if (cmd.hasOption(optLogLever.getOpt())) {    		
+    		String level= cmd.getOptionValue(optLogLever.getOpt()).toLowerCase();
+    		if (EnumUtils.isValidEnum(LogLevel.class, level)) {
+    			logLevel = LogLevel.valueOf(level);
+    		}
+    	}
     	
     	if (cmd.hasOption(optFilePath.getOpt()))    		
     		genDiffCodeSnippetForFile(srcDirPath, patchDirPath, filePath, outputDir);
-    	else
-    		genDiffCodeSnippetForDir(srcDirPath, patchDirPath, outputDir);
+    	else {
+    		String regString = ".*?[Jj]ava$";
+    		if (cmd.hasOption(optRegexPattern.getOpt()))
+    			regString = cmd.getOptionValue(optRegexPattern.getOpt());
+    		genDiffCodeSnippetForDir(srcDirPath, patchDirPath, outputDir,regString);
+    	}
     	
     	System.exit(0);
     }
+	
+	enum LogLevel{
+		error,
+		warning,
+		info,
+		fine,
+		finer,
+		finest
+	}
 
-	private static void genDiffCodeSnippetForDir(String srcDirPath, String patchDirPath,String outputDir) throws Exception {
-		 String[] filePaths = FileUtils.getAllFilesInFolder(patchDirPath);
+	private static void genDiffCodeSnippetForDir(String srcDirPath, String patchDirPath,String outputDir,String regexStr) throws Exception {
+		 String[] filePaths = FileUtils.getAllFilesInFolder(patchDirPath,regexStr);
 		 for(String file:filePaths){
 			 genDiffCodeSnippetForFile(srcDirPath, patchDirPath, file, outputDir);
 		 }
@@ -109,19 +142,22 @@ public class DiffSnippetExtractor {
 			String outputDir) throws Exception {
 		String bugFilePath = srcDirPath+File.separator+filePath;
     	String patchFilePath = patchDirPath+File.separator+filePath;    	    	
-    	System.out.println(bugFilePath);
-    	System.out.println(patchFilePath);		
+    	writeLog(LogLevel.fine,bugFilePath);
+    	writeLog(LogLevel.fine,patchFilePath);		
 		
     	File fBug = new File(bugFilePath);
 		File fPatch = new File(patchFilePath);		
 		AstComparator comparator = new AstComparator(); //.compare((CtElement) el1, (CtElement) el2);    	
 		Diff diff = comparator.compare(fBug, fPatch);		
 		
+		//System.out.println("Result:");
+		//System.out.println(diff.toString());
+		
 		List<Pair<CtElement, CtElement>> diffPairs = new ArrayList<Pair<CtElement,CtElement>>();
 		List<List<Operation<?>>> diffOperations = new ArrayList<List<Operation<?>>>(); 
 		int count=0;
     	for(Operation<?> op : diff.getRootOperations()){
-    		System.out.println(count+": " + op);
+    		writeLog(LogLevel.finer,count+": " + op);
     		CtElement srcNode = op.getSrcNode();
     		//CtElement dstNode = op.getDstNode();
     		
@@ -130,15 +166,15 @@ public class DiffSnippetExtractor {
     			isFromSource=false;	
     		}    		
     		
-    		System.out.println("--- srcNode ---");
-    		System.out.println(srcNode);
+    		writeLog(LogLevel.finer,"--- srcNode ---");
+    		writeLog(LogLevel.finer,srcNode);
     		if (srcNode.getPosition() != null && !(srcNode.getPosition() instanceof NoSourcePosition)){    			
-    			System.out.println("srcPos: "+srcNode.getPosition().getLine() +" to " +srcNode.getPosition().getEndLine());    			
+    			writeLog(LogLevel.finer,"srcPos: "+srcNode.getPosition().getLine() +" to " +srcNode.getPosition().getEndLine());    			
     			//findLine
     		}else
-    			System.out.println("no src position");
+    			writeLog(LogLevel.finer,"no src position");
     		//get method context
-    		System.out.println("srcPath: \n"+srcNode.getPath());
+    		writeLog(LogLevel.finer,"srcPath: \n"+srcNode.getPath());
     		
     		CtElement methodSrc = getContainCodeSnippet(srcNode);
     		    		
@@ -152,14 +188,13 @@ public class DiffSnippetExtractor {
     			methodTgt = tmp;
     		}
     		Pair<CtElement, CtElement> pair = new Pair<CtElement, CtElement>(methodSrc, methodTgt);    		
-			System.out.println("--- source Method: ---");
-			System.out.println(methodSrc);
-			System.out.println("--- target Method: ---");
-			System.out.println(methodTgt);
-			count++;
+			writeLog(LogLevel.finer,"--- source Method: ---");
+			writeLog(LogLevel.finer,methodSrc);
+			writeLog(LogLevel.finer,"--- target Method: ---");
+			writeLog(LogLevel.finer,methodTgt);
 			
 			if (pair.first==null || pair.second==null){
-				System.out.println("WARNING: null source or dest method");
+				writeLog(LogLevel.warning,"WARNING: null source or dest method");
 				continue;
 			}
 			
@@ -176,8 +211,12 @@ public class DiffSnippetExtractor {
 			operationsList.add(op);			
 			count++;
     	}
-    	System.out.println("DiffPairs size: "+diffPairs.size());
-    	
+    	if (diffPairs.size()>0) {
+    		writeLog(LogLevel.info,bugFilePath);
+        	writeLog(LogLevel.info,patchFilePath);
+        	writeLog(LogLevel.info,"DiffPairs size: "+diffPairs.size());
+    		//writeLog(LogLevel.info, "DiffPairs size: "+diffPairs.size()+"; WriteTo: "+outputDir);
+    	}
     	//write code snippet to files
     	String patchedSnippetDir = outputDir+File.separator+"patched";
     	String originSnippetDir = outputDir+File.separator+"origin";
@@ -187,23 +226,30 @@ public class DiffSnippetExtractor {
     		String snippetFilePath = filePath+".snippet"+i;
     		String patchedCodeSnippetFile = patchedSnippetDir+File.separator+snippetFilePath;
     		String originCodeSnippetFile = originSnippetDir+File.separator+snippetFilePath;
-    		//write to file
-    		String origCode = pair.first.toString();    		
+    		//write to file    		
+    		String origCode = pair.first.getOriginalSourceFragment().getSourceCode();  		
     		try{
 	    		FileUtils.writeToFile(originCodeSnippetFile,origCode);
     		}catch (IOException ex){
-    			System.out.println("Error while writing origin code snippet: "+ ex.getMessage());
-    			System.out.println(origCode);
+    			System.err.println("Error while writing origin code snippet "+i+": "+ ex.getMessage());
+    			System.err.println(origCode);
+    			writeLog(LogLevel.error, "Error while writing origin code snippet "+i+": "+ ex.getMessage());
     		}
     		
-    		String patchedCode = pair.second.toString();
+    		String patchedCode = pair.second.getOriginalSourceFragment().getSourceCode();
     		try{
     			FileUtils.writeToFile(patchedCodeSnippetFile,patchedCode);
     		}catch (IOException ex){
-    			System.out.println("Error while writing patched code snippet: "+ ex.getMessage());
-    			System.out.println(patchedCode);
+    			System.err.println("Error while writing patched code snippet "+i+": "+ ex.getMessage());
+    			System.err.println(patchedCode);
+    			writeLog(LogLevel.error,"Error while writing patched code snippet "+i+": "+ ex.getMessage());
     		}
     	}
+	}
+	
+	static void writeLog(LogLevel level,Object msg) {
+		if (logLevel.ordinal() >= level.ordinal())
+			System.out.println(msg);
 	}
 
 	private static CtElement getContainCodeSnippet(CtElement srcNode) {
